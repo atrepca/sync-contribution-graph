@@ -4,41 +4,104 @@
 
 ![GitHub Contributions Graph full squares that have various shades of green](img/cover-photo.png)
 
-<a href="https://twitter.com/kefimochi" align="right">
-    <img alt="Twitter: kefimochi" src="https://img.shields.io/twitter/follow/kefimochi.svg?style=social" target="_blank" align="right" />
-</a>
+Syncs contribution activity from a source GitHub account (e.g. an EMU/work/private account) to a target repository by creating backdated empty commits that match the source account's contribution history.
 
-## How to Use 🚀
+## Overview
 
-1. [Use this repo as a template](https://github.com/kefimochi/sync-contribution-graph/generate) to create a new repo, and provide a name.
-2. Clone your new repo locally.  `cd` into the newly created directory.
-3. It requires NodeJS and `npm` (or `yarn`) to be installed on your machine. Run `npm i` or `yarn install` in your terminal.
-4. Use `npm start` or `yarn start` in order to trigger a series of terminal prompts that will help with configuration.
-   > On Windows, please run it from Git Bash.
+You need two repositories:
 
-If you change your mind about these commits later, you can delete the repository and they'll disappear from your contribution graph. In my case, I used this to sync comits 2021-2022 from my Eventbrite account [here](https://github.com/kateefimova-eb?tab=overview&from=2022-12-01&to=2022-12-31). 
+1. **This repo** (`sync-contribution-graph`) — contains the tool's source code. Clone it anywhere and run it from here.
+2. **A target repo** — a separate, dedicated repository where the dummy commits will be pushed. This is the repo that will show up on your personal contribution graph. Create it on GitHub (e.g. `contributions`) and clone it locally.
 
-<img height="400px" width="auto" src="img/usage.gif" alt="Terminal walkthrough of various prompts that help with configuration." />
+The tool fetches contribution counts from the source account via the GitHub GraphQL API, generates backdated empty commits to match those counts, and force-pushes them to the target repo. It skips days that are already synced (idempotent — safe to re-run).
 
-## Requested Information 🌳
+## Setup
 
-| Key        | Description                                                                                                                                                 | Default value                                        |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `username` | The username whose graph contributions you'd like to copy.                                                                                                  |                                                      |
-| `year`     | Year that you would like to sync with provided `username`. Currently doesn't support multiple years.                                                        | Current year                                         |
-| `execute`  | Let's the code know whether to simply generate `script.sh` that, when executed, will force push commits to `main`. Or to both generate and execute at once. | `false`, in other words generate _without_ execution |
-| `confirm`  | A quick double check that you're ready to proceed.                                                                                                          |
+### 1. Prepare the target repository
 
-## How do I know this is secure? 🔒
+Create a new empty repository on GitHub (e.g. named `contributions`). Clone it locally:
 
-Explore the [code](src/index.js)! It's tiny and there aren't many dependencies.
+```bash
+git clone https://github.com/YOUR_USERNAME/contributions.git
+cd contributions
+```
 
-It only scrapes publicly available data from existing GitHub contribution graphs. It does not have access to private commits or issues created. So I can promise that you will not get in trouble for syncing your personal and work GitHub graphs considering there isn't any private company code being exposed!
+### 2. Set up this tool
 
-## On Project's Future ✨
+Clone this repository and install dependencies:
 
-There's a lot of potential features and automations that could be added! Something as basic as accepting multiple years to pull at once, or more complicated like having a GitHub Action that once per month/year/time period creates a PR with newer commits, making it effortless to keep them synced.
+```bash
+git clone https://github.com/YOUR_USERNAME/sync-contribution-graph.git
+cd sync-contribution-graph
+npm install
+```
 
-## Contribute 👪
+### 3. Create a GitHub PAT for the source account
 
-PRs are welcome! One day I'll probably write a Contributing guide. This project is [MIT](LICENSE) licensed.
+Go to **GitHub Settings → Developer Settings → Personal access tokens → Tokens (classic)** on the **source (EMU/work/private) account** and create a token with:
+
+- `read:user` — required to read contribution data (includes private and org contributions)
+
+If the source account belongs to an enterprise organization, you must also **authorize the token for each organization** via "Configure SSO" after creating it. Note: if you add new scopes to an existing token, GitHub will reset SSO authorization and you will need to re-authorize for all orgs again.
+
+### 4. Create a GitHub PAT for your personal account (if needed)
+
+If your git credentials are not already configured (e.g. via SSH or a credential manager), go to **GitHub Settings → Developer Settings → Personal access tokens → Tokens (classic)** on your **personal account** and create a token with:
+
+- `public_repo` — sufficient if the target repo is public
+- `repo` — required if the target repo is private
+
+This token is used only to push commits to the target repo.
+
+### 5. Run the tool from the target repo directory
+
+```bash
+cd /path/to/contributions
+node /path/to/sync-contribution-graph/src/interface.js
+```
+
+> On Windows, run from Git Bash.
+
+Or add an npm script / alias for convenience.
+
+## Prompts
+
+The tool will ask for the following:
+
+| Prompt | Description |
+| --- | --- |
+| **Source GitHub username** | The EMU, work, or private account whose contributions you want to sync. |
+| **GitHub PAT for the source account** | Classic PAT with `read:user` scope. Must be SSO-authorized if the account is in an enterprise org. |
+| **GitHub PAT for your personal account** | Used to push commits to the target repo. Leave blank if your git credentials are already configured (e.g. via SSH or credential manager). |
+| **Email for commits** | The email that will be used as the commit author. Use your GitHub noreply address (`ID+username@users.noreply.github.com`, found in GitHub Settings → Emails) to avoid exposing your real address. |
+| **Start date** | The earliest date to sync from, in `YYYY-MM-DD` format. Contributions from this date through today will be fetched. Supports ranges spanning multiple years. |
+| **Execute mode** | Choose to generate a bash script only, or generate and execute immediately. Execution will force-push to the target repo — this is difficult to undo. |
+| **Confirm** | Final confirmation before proceeding. |
+
+## How it works
+
+1. Fetches contribution counts per day from the source account using the GitHub GraphQL API (authenticated as the source account via its PAT).
+2. Checks which days are already synced in the target repo by scanning existing commits for the `"Rewriting History!"` message.
+3. Generates a bash script with backdated `git commit --allow-empty` commands for any days that still need commits.
+4. Either writes the script to a temp file for manual review, or executes it immediately and force-pushes to origin.
+
+Re-running the tool is safe — it will only create commits for days not yet present.
+
+## Undoing commits
+
+If you want to remove the synced commits, you can either:
+
+- Delete the target repository entirely (commits will disappear from your graph)
+- Run `git reset --hard <commit>` in the target repo to roll back to a specific point, then force-push
+
+## Security
+
+Explore the [code](src/index.js) — it's small and has minimal dependencies.
+
+The tool uses the GitHub GraphQL API authenticated as the source account. It reads contribution counts only — it does not access private code, issues, pull request content, or any repository data. No private company code is exposed.
+
+Your PATs are never stored anywhere — they are used in memory only during the session, and embedded in the generated bash script's `git push` URL (stored in your system's temp directory).
+
+## License
+
+[MIT](LICENSE)
