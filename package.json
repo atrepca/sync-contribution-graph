@@ -2,7 +2,7 @@
   "name": "sync-contribution-graph",
   "type": "module",
   "version": "2.0.0",
-  "description": "Generates empty commits to match contributions from other public GitHub accounts.",
+  "description": "Generates empty commits to sync contributions from another GitHub account (EMU, work, or private) to your personal contribution graph.",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/interface.js"
@@ -10,10 +10,8 @@
   "author": "Kate Efimova (@kefimochi)",
   "license": "MIT",
   "dependencies": {
-    "axios": "^0.24.0",
-    "fs": "0.0.1-security",
-    "inquirer": "^8.2.0",
-    "node-html-parser": "^5.1.0",
-    "shelljs": "^0.8.4"
+    "axios": "^1.13.6",
+    "inquirer": "^8.2.7",
+    "shelljs": "^0.10.0"
   }
 }
